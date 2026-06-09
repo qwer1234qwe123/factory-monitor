@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Factory Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #0d1117; color: #fff; }
+        .header { background: #161b22; padding: 20px 40px; border-bottom: 1px solid #30363d; }
+        .header h1 { margin: 0; font-size: 24px; color: #58a6ff; }
+        .container { padding: 30px 40px; }
+        .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; }
+        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #8b949e; }
+        .card .value { font-size: 28px; font-weight: bold; }
+        .status-정상 { color: #3fb950; }
+        .status-경고 { color: #d29922; }
+        .status-위험 { color: #f85149; }
+        table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 10px; overflow: hidden; }
+        th { background: #21262d; padding: 12px; text-align: left; color: #8b949e; font-size: 13px; }
+        td { padding: 12px; border-top: 1px solid #30363d; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏭 Smart Factory Predictive Monitor</h1>
+    </div>
+    <div class="container">
+        <!-- 현재 상태 카드 -->
+        <div class="cards" th:if="${latest != null}">
+            <div class="card">
+                <h3>상태</h3>
+                <div class="value" th:classappend="'status-' + ${latest.status}" th:text="${latest.status}">-</div>
+            </div>
+            <div class="card">
+                <h3>잔여수명 (RUL)</h3>
+                <div class="value" th:text="${latest.rul != null ? latest.rul + ' 사이클' : '-'}">-</div>
+            </div>
+            <div class="card">
+                <h3>온도</h3>
+                <div class="value" th:text="${latest.temperature != null ? latest.temperature + ' °C' : '-'}">-</div>
+            </div>
+            <div class="card">
+                <h3>전류</h3>
+                <div class="value" th:text="${latest.current != null ? latest.current + ' A' : '-'}">-</div>
+            </div>
+        </div>
+
+        <!-- 데이터 없을 때 -->
+        <div th:if="${latest == null}" style="text-align:center; padding: 50px; color: #8b949e;">
+            <p>센서 데이터를 기다리는 중...</p>
+        </div>
+
+        <!-- 최근 데이터 테이블 -->
+        <table>
+            <thead>
+                <tr>
+                    <th>시간</th>
+                    <th>디바이스</th>
+                    <th>진동X</th>
+                    <th>온도</th>
+                    <th>전류</th>
+                    <th>RUL</th>
+                    <th>상태</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="data : ${recentData}">
+                    <td th:text="${data.recordedAt}">-</td>
+                    <td th:text="${data.deviceId}">-</td>
+                    <td th:text="${data.vibrationX}">-</td>
+                    <td th:text="${data.temperature}">-</td>
+                    <td th:text="${data.current}">-</td>
+                    <td th:text="${data.rul}">-</td>
+                    <td th:classappend="'status-' + ${data.status}" th:text="${data.status}">-</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 5초마다 자동 새로고침 -->
+    <script>
+        setTimeout(() => location.reload(), 5000);
+    </script>
+</body>
+</html>

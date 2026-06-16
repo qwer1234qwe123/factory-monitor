@@ -3,83 +3,282 @@
 <head>
     <meta charset="UTF-8">
     <title>Smart Factory Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; background: #0d1117; color: #fff; }
-        .header { background: #161b22; padding: 20px 40px; border-bottom: 1px solid #30363d; }
-        .header h1 { margin: 0; font-size: 24px; color: #58a6ff; }
-        .container { padding: 30px 40px; }
-        .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; }
-        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #8b949e; }
-        .card .value { font-size: 28px; font-weight: bold; }
-        .status-정상 { color: #3fb950; }
-        .status-경고 { color: #d29922; }
-        .status-위험 { color: #f85149; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #0d1117; color: #fff; }
+
+        .header {
+            background: #161b22;
+            padding: 18px 40px;
+            border-bottom: 1px solid #30363d;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .header h1 { font-size: 22px; color: #58a6ff; }
+        #status-badge {
+            margin-left: auto;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 15px;
+            background: #21262d;
+        }
+        .status-정상  { color: #3fb950; }
+        .status-경고  { color: #d29922; }
+        .status-위험  { color: #f85149; }
+        .badge-정상   { background: #1a3a1f !important; color: #3fb950; border: 1px solid #3fb950; }
+        .badge-경고   { background: #3a2e0a !important; color: #d29922; border: 1px solid #d29922; }
+        .badge-위험   { background: #3a0d0a !important; color: #f85149; border: 1px solid #f85149; }
+
+        .container { padding: 28px 40px; }
+
+        /* 경고 배너 */
+        #warning-banner {
+            display: none;
+            background: #3a2e0a;
+            border: 1px solid #d29922;
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            color: #d29922;
+            font-size: 14px;
+        }
+        #warning-banner.danger {
+            background: #3a0d0a;
+            border-color: #f85149;
+            color: #f85149;
+        }
+
+        /* 센서 카드 */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 18px;
+        }
+        .card h3 { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+        .card .value { font-size: 26px; font-weight: bold; color: #e6edf3; }
+        .card .unit  { font-size: 12px; color: #8b949e; margin-top: 4px; }
+
+        /* 차트 영역 */
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .chart-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .chart-box h3 { font-size: 13px; color: #8b949e; margin-bottom: 14px; }
+
+        /* 테이블 */
         table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 10px; overflow: hidden; }
-        th { background: #21262d; padding: 12px; text-align: left; color: #8b949e; font-size: 13px; }
-        td { padding: 12px; border-top: 1px solid #30363d; font-size: 13px; }
+        th { background: #21262d; padding: 11px 14px; text-align: left; color: #8b949e; font-size: 12px; }
+        td { padding: 10px 14px; border-top: 1px solid #30363d; font-size: 13px; }
+
+        #last-update { font-size: 12px; color: #8b949e; margin-bottom: 14px; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🏭 Smart Factory Predictive Monitor</h1>
-    </div>
-    <div class="container">
-        <!-- 현재 상태 카드 -->
-        <div class="cards" th:if="${latest != null}">
-            <div class="card">
-                <h3>상태</h3>
-                <div class="value" th:classappend="'status-' + ${latest.status}" th:text="${latest.status}">-</div>
-            </div>
-            <div class="card">
-                <h3>잔여수명 (RUL)</h3>
-                <div class="value" th:text="${latest.rul != null ? latest.rul + ' 사이클' : '-'}">-</div>
-            </div>
-            <div class="card">
-                <h3>온도</h3>
-                <div class="value" th:text="${latest.temperature != null ? latest.temperature + ' °C' : '-'}">-</div>
-            </div>
-            <div class="card">
-                <h3>전류</h3>
-                <div class="value" th:text="${latest.current != null ? latest.current + ' A' : '-'}">-</div>
-            </div>
-        </div>
 
-        <!-- 데이터 없을 때 -->
-        <div th:if="${latest == null}" style="text-align:center; padding: 50px; color: #8b949e;">
-            <p>센서 데이터를 기다리는 중...</p>
-        </div>
+<div class="header">
+    <h1>🏭 Smart Factory Monitor</h1>
+    <span id="status-badge">연결 중...</span>
+</div>
 
-        <!-- 최근 데이터 테이블 -->
-        <table>
-            <thead>
-                <tr>
-                    <th>시간</th>
-                    <th>디바이스</th>
-                    <th>진동X</th>
-                    <th>온도</th>
-                    <th>전류</th>
-                    <th>RUL</th>
-                    <th>상태</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="data : ${recentData}">
-                    <td th:text="${data.recordedAt}">-</td>
-                    <td th:text="${data.deviceId}">-</td>
-                    <td th:text="${data.vibrationX}">-</td>
-                    <td th:text="${data.temperature}">-</td>
-                    <td th:text="${data.current}">-</td>
-                    <td th:text="${data.rul}">-</td>
-                    <td th:classappend="'status-' + ${data.status}" th:text="${data.status}">-</td>
-                </tr>
-            </tbody>
-        </table>
+<div class="container">
+
+    <!-- 경고 배너 -->
+    <div id="warning-banner"></div>
+
+    <!-- 센서 카드 -->
+    <div class="cards">
+        <div class="card">
+            <h3>진동 X</h3>
+            <div class="value" id="vib-x">-</div>
+            <div class="unit">g</div>
+        </div>
+        <div class="card">
+            <h3>진동 Y</h3>
+            <div class="value" id="vib-y">-</div>
+            <div class="unit">g</div>
+        </div>
+        <div class="card">
+            <h3>진동 Z</h3>
+            <div class="value" id="vib-z">-</div>
+            <div class="unit">g</div>
+        </div>
+        <div class="card">
+            <h3>온도</h3>
+            <div class="value" id="temp">-</div>
+            <div class="unit">°C</div>
+        </div>
+        <div class="card">
+            <h3>전류</h3>
+            <div class="value" id="curr">-</div>
+            <div class="unit">A</div>
+        </div>
     </div>
 
-    <!-- 5초마다 자동 새로고침 -->
-    <script>
-        setTimeout(() => location.reload(), 5000);
-    </script>
+    <!-- 차트 -->
+    <div class="charts">
+        <div class="chart-box">
+            <h3>🌡 온도 추이 (최근 20개)</h3>
+            <canvas id="tempChart" height="120"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>⚡ 전류 추이 (최근 20개)</h3>
+            <canvas id="currChart" height="120"></canvas>
+        </div>
+    </div>
+
+    <div id="last-update"></div>
+
+    <!-- 최근 데이터 테이블 -->
+    <table>
+        <thead>
+            <tr>
+                <th>시간</th>
+                <th>디바이스</th>
+                <th>진동X</th>
+                <th>진동Y</th>
+                <th>진동Z</th>
+                <th>온도</th>
+                <th>전류</th>
+                <th>상태</th>
+                <th>메시지</th>
+            </tr>
+        </thead>
+        <tbody id="data-table"></tbody>
+    </table>
+</div>
+
+<script>
+// ── Chart.js 초기화 ──────────────────────────────────────
+const chartOpts = (label, color) => ({
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label,
+            data: [],
+            borderColor: color,
+            backgroundColor: color + '22',
+            borderWidth: 2,
+            pointRadius: 2,
+            tension: 0.3,
+            fill: true
+        }]
+    },
+    options: {
+        animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { ticks: { color: '#8b949e', maxTicksLimit: 6 }, grid: { color: '#21262d' } },
+            y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } }
+        }
+    }
+});
+
+const tempChart = new Chart(document.getElementById('tempChart'), chartOpts('온도', '#58a6ff'));
+const currChart = new Chart(document.getElementById('currChart'), chartOpts('전류', '#3fb950'));
+
+// ── 데이터 업데이트 ──────────────────────────────────────
+function statusClass(status) {
+    if (status === '위험') return 'status-위험';
+    if (status === '경고') return 'status-경고';
+    return 'status-정상';
+}
+
+function updateCharts(dataList) {
+    const reversed = [...dataList].reverse(); // 오래된 것 → 최신 순
+    const labels  = reversed.map(d => d.recordedAt ? d.recordedAt.substring(11, 19) : '');
+    const temps   = reversed.map(d => d.temperature);
+    const currs   = reversed.map(d => d.current);
+
+    tempChart.data.labels = labels;
+    tempChart.data.datasets[0].data = temps;
+    tempChart.update();
+
+    currChart.data.labels = labels;
+    currChart.data.datasets[0].data = currs;
+    currChart.update();
+}
+
+function updateTable(dataList) {
+    const tbody = document.getElementById('data-table');
+    tbody.innerHTML = dataList.map(d => `
+        <tr>
+            <td>${d.recordedAt ? d.recordedAt.substring(0, 19).replace('T', ' ') : '-'}</td>
+            <td>${d.deviceId ?? '-'}</td>
+            <td>${d.vibrationX ?? '-'}</td>
+            <td>${d.vibrationY ?? '-'}</td>
+            <td>${d.vibrationZ ?? '-'}</td>
+            <td>${d.temperature ?? '-'}</td>
+            <td>${d.current ?? '-'}</td>
+            <td class="${statusClass(d.status)}">${d.status ?? '-'}</td>
+            <td>${d.message ?? '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function updateLatest(d) {
+    document.getElementById('vib-x').textContent = d.vibrationX ?? '-';
+    document.getElementById('vib-y').textContent = d.vibrationY ?? '-';
+    document.getElementById('vib-z').textContent = d.vibrationZ ?? '-';
+    document.getElementById('temp').textContent  = d.temperature ?? '-';
+    document.getElementById('curr').textContent  = d.current ?? '-';
+
+    const badge = document.getElementById('status-badge');
+    badge.textContent = d.status ?? '-';
+    badge.className = 'badge-' + (d.status ?? '정상');
+
+    // 경고 배너
+    const banner = document.getElementById('warning-banner');
+    if (d.status === '위험' || d.status === '경고') {
+        banner.textContent = '⚠️ ' + (d.message ?? '');
+        banner.className = d.status === '위험' ? 'danger' : '';
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+// ── 폴링 (5초) ──────────────────────────────────────────
+async function fetchData() {
+    try {
+        const [latestRes, recentRes] = await Promise.all([
+            fetch('api/sensor/latest'),
+            fetch('api/sensor/recent')
+        ]);
+        const latest = await latestRes.json();
+        const recent = await recentRes.json();
+
+        if (latest) updateLatest(latest);
+        if (recent?.length) {
+            updateTable(recent);
+            updateCharts(recent.slice(0, 20));
+        }
+
+        document.getElementById('last-update').textContent =
+            '마지막 업데이트: ' + new Date().toLocaleTimeString('ko-KR');
+    } catch (e) {
+        console.error('데이터 조회 실패:', e);
+    }
+}
+
+fetchData();
+setInterval(fetchData, 5000);
+</script>
 </body>
 </html>

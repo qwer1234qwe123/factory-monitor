@@ -87,6 +87,108 @@
         td { padding: 10px 14px; border-top: 1px solid #30363d; font-size: 13px; }
 
         #last-update { font-size: 12px; color: #8b949e; margin-bottom: 14px; }
+
+/* 팝업 오버레이 */
+#chat-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+}
+#chat-overlay.open { display: flex; }
+
+/* 팝업 박스 */
+#chat-popup {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 14px;
+    width: 700px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#chat-popup-header {
+    padding: 16px 20px;
+    background: #21262d;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: bold;
+    font-size: 15px;
+}
+#chat-popup-header button {
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 20px;
+    cursor: pointer;
+}
+#chat-report {
+    padding: 20px;
+    border-bottom: 1px solid #30363d;
+    font-size: 13px;
+    line-height: 1.7;
+    max-height: 280px;
+    overflow-y: auto;
+}
+#chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 120px;
+}
+.msg-user {
+    align-self: flex-end;
+    background: #1f6feb;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 14px 14px 2px 14px;
+    max-width: 80%;
+    font-size: 13px;
+}
+.msg-ai {
+    align-self: flex-start;
+    background: #21262d;
+    color: #e6edf3;
+    padding: 8px 14px;
+    border-radius: 14px 14px 14px 2px;
+    max-width: 80%;
+    font-size: 13px;
+    line-height: 1.6;
+}
+#chat-input-area {
+    padding: 12px 16px;
+    border-top: 1px solid #30363d;
+    display: flex;
+    gap: 8px;
+}
+#chat-input {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+}
+#chat-send {
+    background: #1f6feb;
+    border: none;
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
     </style>
 </head>
 <body>
@@ -100,7 +202,16 @@
 
     <!-- 경고 배너 -->
     <div id="warning-banner"></div>
+    <!-- 리포트 버튼 -->
+    <div style="margin-bottom: 20px;">
+        <button id="report-btn" onclick="generateReport()"
+            style="background:#1f6feb;border:none;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;">
+            🤖 Gemini 정비 리포트 생성
+        </button>
+    </div>
 
+    <!-- 리포트 출력 영역 -->
+    <div id="report-box" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px;margin-bottom:20px;white-space:pre-wrap;font-size:14px;line-height:1.7;color:#e6edf3;"></div>
     <!-- 센서 카드 -->
     <div class="cards">
         <div class="card">
@@ -279,6 +390,143 @@ async function fetchData() {
 
 fetchData();
 setInterval(fetchData, 5000);
+
+// ── Gemini 리포트 생성 ───────────────────────────────────
+let chatHistory = [];
+let currentSensorData = null;
+
+function closeChat() {
+    document.getElementById('chat-overlay').classList.remove('open');
+}
+
+function renderMd(text) {
+    return text
+        .replace(/^## (.+)$/gm, '<h3 style="color:#58a6ff;margin-bottom:10px;">$1</h3>')
+        .replace(/^### (.+)$/gm, '<h4 style="color:#8b949e;margin-bottom:8px;">$1</h4>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^\* (.+)$/gm, '<li style="margin-left:20px;margin-bottom:4px;">$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li style="margin-left:20px;margin-bottom:6px;"><strong>$1.</strong> $2</li>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+}
+
+async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const messages = document.getElementById('chat-messages');
+    const msg = input.value.trim();
+    if (!msg || !currentSensorData) return;
+
+    input.value = '';
+
+    // 사용자 메시지
+    messages.innerHTML += `<div class="msg-user">${msg}</div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    // AI 응답
+    const sendBtn = document.getElementById('chat-send');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+
+    try {
+        const payload = {
+            message: msg,
+            history: chatHistory,
+            device_id:   currentSensorData.deviceId   ?? 'unknown',
+            vibration_x: currentSensorData.vibrationX ?? 0,
+            vibration_y: currentSensorData.vibrationY ?? 0,
+            vibration_z: currentSensorData.vibrationZ ?? 0,
+            temperature: currentSensorData.temperature ?? 0,
+            current:     currentSensorData.current    ?? 0,
+            status:      currentSensorData.status     ?? '정상'
+        };
+
+        const res = await fetch('api/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        const reply = result.reply ?? result.error ?? '응답 실패';
+
+        messages.innerHTML += `<div class="msg-ai">${renderMd(reply)}</div>`;
+        messages.scrollTop = messages.scrollHeight;
+
+        // 히스토리 업데이트
+        chatHistory.push({role: 'user',  parts: msg});
+        chatHistory.push({role: 'model', parts: reply});
+    } catch (e) {
+        messages.innerHTML += `<div class="msg-ai">오류: ${e.message}</div>`;
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = '전송';
+    }
+}
+
+
+async function generateReport() {
+    const btn = document.getElementById('report-btn');
+    const box = document.getElementById('report-box');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ 리포트 생성 중...';
+
+    try {
+        const res = await fetch('api/sensor/latest');
+        const d = await res.json();
+        if (!d) { alert('센서 데이터 없음'); return; }
+
+        currentSensorData = d;
+        chatHistory = [];
+
+        const payload = {
+            device_id:   d.deviceId   ?? 'unknown',
+            vibration_x: d.vibrationX ?? 0,
+            vibration_y: d.vibrationY ?? 0,
+            vibration_z: d.vibrationZ ?? 0,
+            temperature: d.temperature ?? 0,
+            current:     d.current    ?? 0,
+            status:      d.status     ?? '정상',
+            warnings:    d.message && d.message !== '정상 가동 중' ? [d.message] : []
+        };
+
+        const reportRes = await fetch('api/report', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const result = await reportRes.json();
+        const raw = result.report ?? result.error ?? '리포트 생성 실패';
+
+        // 팝업 열기
+        document.getElementById('chat-report').innerHTML = renderMd(raw);
+        document.getElementById('chat-messages').innerHTML = '';
+        document.getElementById('chat-overlay').classList.add('open');
+    } catch (e) {
+        alert('오류: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🤖 Gemini 정비 리포트 생성';
+    }
+
+}
+
 </script>
+
+<!-- 채팅 팝업 -->
+<div id="chat-overlay">
+    <div id="chat-popup">
+        <div id="chat-popup-header">
+            <span>🤖 Gemini 정비 어시스턴트</span>
+            <button onclick="closeChat()">✕</button>
+        </div>
+        <div id="chat-report"></div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-area">
+            <input id="chat-input" type="text" placeholder="정비 관련 질문을 입력하세요..." 
+                onkeydown="if(event.key==='Enter') sendChat()">
+            <button id="chat-send" onclick="sendChat()">전송</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

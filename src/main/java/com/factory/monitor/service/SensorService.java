@@ -45,10 +45,59 @@ public class SensorService {
 
     // 센서 데이터 저장 (FastAPI 결과 포함)
     public SensorData save(SensorData sensorData) {
-        PredictResponse result = checkStatus(sensorData);
-        sensorData.setStatus(result.getStatus());
-        sensorData.setMessage(result.getMessage());
+        // 1. 임계값 기반 상태 판정
+        PredictResponse statusResult = checkStatus(sensorData);
+
+        // 2. ONNX 이상탐지 점수
+        PredictResponse predictResult = callPredict(sensorData);
+
+        // 3. 둘 중 더 심각한 상태 채택
+        String finalStatus = mergeStatus(statusResult.getStatus(), predictResult.getStatus());
+        String finalMessage = buildMessage(statusResult, predictResult);
+
+        sensorData.setStatus(finalStatus);
+        sensorData.setMessage(finalMessage);
         return sensorDataRepository.save(sensorData);
+    }
+
+    private PredictResponse callPredict(SensorData sensorData) {
+        try {
+            String url = aiServerUrl + "/predict";
+            Map<String, Object> request = Map.of(
+                    "vibration_x", sensorData.getVibrationX(),
+                    "vibration_y", sensorData.getVibrationY(),
+                    "vibration_z", sensorData.getVibrationZ(),
+                    "temperature", sensorData.getTemperature(),
+                    "current", sensorData.getCurrent());
+            return restTemplate.postForObject(url, request, PredictResponse.class);
+        } catch (Exception e) {
+            PredictResponse fallback = new PredictResponse();
+            fallback.setStatus("정상");
+            fallback.setMessage("");
+            return fallback;
+        }
+    }
+
+    private String mergeStatus(String s1, String s2) {
+        if ("위험".equals(s1) || "위험".equals(s2))
+            return "위험";
+        if ("경고".equals(s1) || "경고".equals(s2))
+            return "경고";
+        return "정상";
+    }
+
+    private String buildMessage(PredictResponse status, PredictResponse predict) {
+        StringBuilder sb = new StringBuilder();
+        if (status.getMessage() != null && !status.getMessage().isBlank()
+                && !"정상 가동 중".equals(status.getMessage())) {
+            sb.append(status.getMessage());
+        }
+        if (predict.getMessage() != null && !predict.getMessage().isBlank()) {
+            if (sb.length() > 0)
+                sb.append(" / ");
+            sb.append(predict.getMessage());
+        }
+        return sb.length() > 0 ? sb.toString() : "정상 가동 중";
     }
 
     // 최근 50개 조회
@@ -59,5 +108,24 @@ public class SensorService {
     // 최신 1개 조회
     public SensorData getLatest() {
         return sensorDataRepository.findTopByOrderByRecordedAtDesc();
+    }
+
+    // Gemini 리포트 생성 (FastAPI /report 프록시)
+    public Map<String, Object> generateReport(Map<String, Object> payload) {
+        try {
+            String url = aiServerUrl + "/report";
+            return restTemplate.postForObject(url, payload, Map.class);
+        } catch (Exception e) {
+            return Map.of("error", "리포트 생성 실패: " + e.getMessage());
+        }
+    }
+
+    public Map<String, Object> chat(Map<String, Object> payload) {
+        try {
+            String url = aiServerUrl + "/chat";
+            return restTemplate.postForObject(url, payload, Map.class);
+        } catch (Exception e) {
+            return Map.of("error", "채팅 실패: " + e.getMessage());
+        }
     }
 }

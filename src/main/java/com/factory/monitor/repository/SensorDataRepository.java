@@ -15,4 +15,7 @@ public interface SensorDataRepository extends JpaRepository<SensorData, Long> {
 
     // 최신 1개
     SensorData findTopByOrderByRecordedAtDesc();
+
+    long countByDeviceId(String deviceId);
+
 }

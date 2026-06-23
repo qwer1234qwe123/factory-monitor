@@ -2,6 +2,7 @@ package com.factory.monitor.controller;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -64,5 +65,21 @@ public class SensorController {
     @ResponseBody
     public ResponseEntity<Map<String, Object>> chat(@RequestBody Map<String, Object> payload) {
         return ResponseEntity.ok(sensorService.chat(payload));
+    }
+
+    // 기존 코드 아래에 추가
+    @GetMapping("/api/sensor/uptime")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getUptime() {
+        long totalCount = sensorService.countByDeviceId("motor_01");
+        double uptimeHours = Math.round((totalCount / 3600.0) * 10) / 10.0;
+        double ratedHours = 3000.0;
+        double remainPercent = Math.round(((ratedHours - uptimeHours) / ratedHours) * 1000) / 10.0;
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("uptimeHours", uptimeHours);
+        result.put("ratedHours", ratedHours);
+        result.put("remainPercent", Math.max(remainPercent, 0));
+        return ResponseEntity.ok(result);
     }
 }

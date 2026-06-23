@@ -128,4 +128,8 @@ public class SensorService {
             return Map.of("error", "채팅 실패: " + e.getMessage());
         }
     }
+
+    public long countByDeviceId(String deviceId) {
+        return sensorDataRepository.countByDeviceId(deviceId);
+    }
 }
